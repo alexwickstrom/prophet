@@ -47,7 +47,7 @@ class TestProphet(TestCase):
         future = forecaster.predict(future)
         # this gives ~ 10.64
         res = self.rmse(future['yhat'], test['y'])
-        self.assertTrue(15 > res > 5, msg="backend: {}".format(forecaster.stan_backend))
+        self.assertTrue(15 > res > 5, msg=f"backend: {forecaster.stan_backend}")
 
     def test_fit_predict_newton(self):
         days = 30
@@ -63,7 +63,9 @@ class TestProphet(TestCase):
         future = forecaster.predict(future)
         # this gives ~ 10.64
         res = self.rmse(future['yhat'], test['y'])
-        self.assertAlmostEqual(res, 23.44, places=2, msg="backend: {}".format(forecaster.stan_backend))
+        self.assertAlmostEqual(
+            res, 23.44, places=2, msg=f"backend: {forecaster.stan_backend}"
+        )
 
     @skipUnless("--test-slow" in sys.argv, "Skipped due to the lack of '--test-slow' argument")
     def test_fit_sampling_predict(self):
@@ -81,7 +83,7 @@ class TestProphet(TestCase):
         future = forecaster.predict(future)
         # this gives ~ 215.77
         res = self.rmse(future['yhat'], test['y'])
-        self.assertTrue(236 > res > 193, msg="backend: {}".format(forecaster.stan_backend))
+        self.assertTrue(236 > res > 193, msg=f"backend: {forecaster.stan_backend}")
 
     def test_fit_predict_no_seasons(self):
         N = DATA.shape[0]

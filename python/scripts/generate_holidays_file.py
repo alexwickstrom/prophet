@@ -32,7 +32,7 @@ def utf8_to_ascii(text):
         .strip()
     )
     # Check if anything converted
-    if sum(1 for x in ascii_text if x not in [' ', '(', ')', ',']) == 0:
+    if sum(x not in [' ', '(', ')', ','] for x in ascii_text) == 0:
         return 'FAILED_TO_PARSE'
     else:
         return ascii_text
