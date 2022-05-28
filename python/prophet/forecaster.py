@@ -358,10 +358,7 @@ class Prophet(object):
             if n_vals < 2:
                 standardize = False
             if standardize == 'auto':
-                if set(df[name].unique()) == {1, 0}:
-                    standardize = False #  Don't standardize binary variables.
-                else:
-                    standardize = True
+                standardize = set(df[name].unique()) != {1, 0}
             if standardize:
                 mu = df[name].mean()
                 std = df[name].std()
@@ -378,16 +375,7 @@ class Prophet(object):
         2) We are generating a grid of them.
         3) The user prefers no changepoints be used.
         """
-        if self.changepoints is not None:
-            if len(self.changepoints) == 0:
-                pass
-            else:
-                too_low = min(self.changepoints) < self.history['ds'].min()
-                too_high = max(self.changepoints) > self.history['ds'].max()
-                if too_low or too_high:
-                    raise ValueError(
-                        'Changepoints must fall within training data.')
-        else:
+        if self.changepoints is None:
             # Place potential changepoints evenly through first
             # `changepoint_range` proportion of the history
             hist_size = int(np.floor(self.history.shape[0]
@@ -411,6 +399,12 @@ class Prophet(object):
             else:
                 # set empty changepoints
                 self.changepoints = pd.Series(pd.to_datetime([]), name='ds')
+        elif len(self.changepoints) != 0:
+            too_low = min(self.changepoints) < self.history['ds'].min()
+            too_high = max(self.changepoints) > self.history['ds'].max()
+            if too_low or too_high:
+                raise ValueError(
+                    'Changepoints must fall within training data.')
         if len(self.changepoints) > 0:
             self.changepoints_t = np.sort(np.array(
                 (self.changepoints - self.start) / self.t_scale))
@@ -461,10 +455,7 @@ class Prophet(object):
         pd.DataFrame with seasonality features.
         """
         features = cls.fourier_series(dates, period, series_order)
-        columns = [
-            '{}_delim_{}'.format(prefix, i + 1)
-            for i in range(features.shape[1])
-        ]
+        columns = [f'{prefix}_delim_{i + 1}' for i in range(features.shape[1])]
         return pd.DataFrame(features, columns=columns)
 
     def construct_holiday_dataframe(self, dates):
@@ -539,8 +530,8 @@ class Prophet(object):
         for row in holidays.itertuples():
             dt = row.ds.date()
             try:
-                lw = int(getattr(row, 'lower_window', 0))
-                uw = int(getattr(row, 'upper_window', 0))
+                lw = getattr(row, 'lower_window', 0)
+                uw = getattr(row, 'upper_window', 0)
             except ValueError:
                 lw = 0
                 uw = 0
@@ -562,11 +553,7 @@ class Prophet(object):
                     loc = row_index.get_loc(occurrence)
                 except KeyError:
                     loc = None
-                key = '{}_delim_{}{}'.format(
-                    row.holiday,
-                    '+' if offset >= 0 else '-',
-                    abs(offset)
-                )
+                key = f"{row.holiday}_delim_{'+' if offset >= 0 else '-'}{abs(offset)}"
                 if loc is not None:
                     expanded_holidays[key][loc] = 1.
                 else:
@@ -797,7 +784,7 @@ class Prophet(object):
             modes[props['mode']].append(name)
 
         # Dummy to prevent empty X
-        if len(seasonal_features) == 0:
+        if not seasonal_features:
             seasonal_features.append(
                 pd.DataFrame({'zeros': np.zeros(df.shape[0])}))
             prior_scales.append(1.)
@@ -1159,8 +1146,10 @@ class Prophet(object):
             'sigma_obs': 1,
         }
 
-        if history['y'].min() == history['y'].max() and \
-                (self.growth == 'linear' or self.growth == 'flat'):
+        if history['y'].min() == history['y'].max() and self.growth in [
+            'linear',
+            'flat',
+        ]:
             self.params = stan_init
             self.params['sigma_obs'] = 1e-9
             for par in self.params:
@@ -1199,18 +1188,14 @@ class Prophet(object):
 
         if df is None:
             df = self.history.copy()
+        elif df.shape[0] == 0:
+            raise ValueError('Dataframe has no rows.')
         else:
-            if df.shape[0] == 0:
-                raise ValueError('Dataframe has no rows.')
             df = self.setup_dataframe(df.copy())
 
         df['trend'] = self.predict_trend(df)
         seasonal_components = self.predict_seasonal_components(df)
-        if self.uncertainty_samples:
-            intervals = self.predict_uncertainty(df)
-        else:
-            intervals = None
-
+        intervals = self.predict_uncertainty(df) if self.uncertainty_samples else None
         # Drop columns except ds, cap, floor, and trend
         cols = ['ds', 'trend']
         if 'cap' in df:
@@ -1299,8 +1284,7 @@ class Prophet(object):
         -------
         Vector y(t).
         """
-        m_t = m * np.ones_like(t)
-        return m_t
+        return m * np.ones_like(t)
 
     def predict_trend(self, df):
         """Predict trend using the prophet model.
@@ -1424,8 +1408,7 @@ class Prophet(object):
         posterior predictive samples for that component.
         """
         df = self.setup_dataframe(df.copy())
-        sim_values = self.sample_posterior_predictive(df)
-        return sim_values
+        return self.sample_posterior_predictive(df)
 
     def predict_uncertainty(self, df):
         """Prediction intervals for yhat and trend.
@@ -1445,10 +1428,14 @@ class Prophet(object):
 
         series = {}
         for key in ['yhat', 'trend']:
-            series['{}_lower'.format(key)] = self.percentile(
-                sim_values[key], lower_p, axis=1)
-            series['{}_upper'.format(key)] = self.percentile(
-                sim_values[key], upper_p, axis=1)
+            series[f'{key}_lower'] = self.percentile(
+                sim_values[key], lower_p, axis=1
+            )
+
+            series[f'{key}_upper'] = self.percentile(
+                sim_values[key], upper_p, axis=1
+            )
+
 
         return pd.DataFrame(series)
 

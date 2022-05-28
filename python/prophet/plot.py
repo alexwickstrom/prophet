@@ -141,12 +141,15 @@ def plot_components(
     regressors = {'additive': False, 'multiplicative': False}
     for name, props in m.extra_regressors.items():
         regressors[props['mode']] = True
-    for mode in ['additive', 'multiplicative']:
-        if regressors[mode] and 'extra_regressors_{}'.format(mode) in fcst:
-            components.append('extra_regressors_{}'.format(mode))
+    components.extend(
+        f'extra_regressors_{mode}'
+        for mode in ['additive', 'multiplicative']
+        if regressors[mode] and f'extra_regressors_{mode}' in fcst
+    )
+
     npanel = len(components)
 
-    figsize = figsize if figsize else (9, 3 * npanel)
+    figsize = figsize or (9, 3 * npanel)
     fig, axes = plt.subplots(npanel, 1, facecolor='w', figsize=figsize)
 
     if npanel == 1:
@@ -467,8 +470,11 @@ def add_changepoints_to_plot(
     signif_changepoints = m.changepoints[
         np.abs(np.nanmean(m.params['delta'], axis=0)) >= threshold
     ] if len(m.changepoints) > 0 else []
-    for cp in signif_changepoints:
-        artists.append(ax.axvline(x=cp, c=cp_color, ls=cp_linestyle))
+    artists.extend(
+        ax.axvline(x=cp, c=cp_color, ls=cp_linestyle)
+        for cp in signif_changepoints
+    )
+
     return artists
 
 
@@ -548,7 +554,7 @@ def plot_cross_validation_metric(
     ax.plot(x_plt_h, df_h[metric], '-', c=color)
     ax.grid(True)
 
-    ax.set_xlabel('Horizon ({})'.format(dt_names[i]))
+    ax.set_xlabel(f'Horizon ({dt_names[i]})')
     ax.set_ylabel(metric)
     return fig
 
@@ -590,15 +596,16 @@ def plot_plotly(m, fcst, uncertainty=True, plot_cap=True, trend=False, changepoi
     line_width = 2
     marker_size = 4
 
-    data = []
-    # Add actual
-    data.append(go.Scatter(
-        name='Actual',
-        x=m.history['ds'],
-        y=m.history['y'],
-        marker=dict(color=actual_color, size=marker_size),
-        mode='markers'
-    ))
+    data = [
+        go.Scatter(
+            name='Actual',
+            x=m.history['ds'],
+            y=m.history['y'],
+            marker=dict(color=actual_color, size=marker_size),
+            mode='markers',
+        )
+    ]
+
     # Add lower bound
     if uncertainty and m.uncertainty_samples:
         data.append(go.Scatter(
@@ -673,40 +680,30 @@ def plot_plotly(m, fcst, uncertainty=True, plot_cap=True, trend=False, changepoi
         showlegend=False,
         width=figsize[0],
         height=figsize[1],
-        yaxis=dict(
-            title=ylabel
-        ),
+        yaxis=dict(title=ylabel),
         xaxis=dict(
             title=xlabel,
             type='date',
             rangeselector=dict(
-                buttons=list([
-                    dict(count=7,
-                         label='1w',
-                         step='day',
-                         stepmode='backward'),
-                    dict(count=1,
-                         label='1m',
-                         step='month',
-                         stepmode='backward'),
-                    dict(count=6,
-                         label='6m',
-                         step='month',
-                         stepmode='backward'),
-                    dict(count=1,
-                         label='1y',
-                         step='year',
-                         stepmode='backward'),
-                    dict(step='all')
-                ])
+                buttons=[
+                    dict(count=7, label='1w', step='day', stepmode='backward'),
+                    dict(
+                        count=1, label='1m', step='month', stepmode='backward'
+                    ),
+                    dict(
+                        count=6, label='6m', step='month', stepmode='backward'
+                    ),
+                    dict(
+                        count=1, label='1y', step='year', stepmode='backward'
+                    ),
+                    dict(step='all'),
+                ]
             ),
-            rangeslider=dict(
-                visible=True
-            ),
+            rangeslider=dict(visible=True),
         ),
     )
-    fig = go.Figure(data=data, layout=layout)
-    return fig
+
+    return go.Figure(data=data, layout=layout)
 
 
 def plot_components_plotly(
@@ -734,9 +731,12 @@ def plot_components_plotly(
     """
 
     # Identify components to plot and get their Plotly props
-    components = {}
-    components['trend'] = get_forecast_component_plotly_props(
-        m, fcst, 'trend', uncertainty, plot_cap)
+    components = {
+        'trend': get_forecast_component_plotly_props(
+            m, fcst, 'trend', uncertainty, plot_cap
+        )
+    }
+
     if m.train_holiday_names is not None and 'holidays' in fcst:
         components['holidays'] = get_forecast_component_plotly_props(
             m, fcst, 'holidays', uncertainty)
@@ -745,9 +745,13 @@ def plot_components_plotly(
     for name, props in m.extra_regressors.items():
         regressors[props['mode']] = True
     for mode in ['additive', 'multiplicative']:
-        if regressors[mode] and 'extra_regressors_{}'.format(mode) in fcst:
-            components['extra_regressors_{}'.format(mode)] = get_forecast_component_plotly_props(
-                m, fcst, 'extra_regressors_{}'.format(mode))
+        if regressors[mode] and f'extra_regressors_{mode}' in fcst:
+            components[
+                f'extra_regressors_{mode}'
+            ] = get_forecast_component_plotly_props(
+                m, fcst, f'extra_regressors_{mode}'
+            )
+
     for seasonality in m.seasonalities:
         components[seasonality] = get_seasonality_plotly_props(m, seasonality)
 
@@ -763,8 +767,8 @@ def plot_components_plotly(
             xaxis = fig['layout']['xaxis']
             yaxis = fig['layout']['yaxis']
         else:
-            xaxis = fig['layout']['xaxis{}'.format(i + 1)]
-            yaxis = fig['layout']['yaxis{}'.format(i + 1)]
+            xaxis = fig['layout'][f'xaxis{i + 1}']
+            yaxis = fig['layout'][f'yaxis{i + 1}']
         xaxis.update(components[name]['xaxis'])
         yaxis.update(components[name]['yaxis'])
         for trace in components[name]['traces']:
@@ -799,8 +803,7 @@ def plot_forecast_component_plotly(m, fcst, name, uncertainty=True, plot_cap=Fal
         xaxis=props['xaxis'],
         yaxis=props['yaxis']
     )
-    fig = go.Figure(data=props['traces'], layout=layout)
-    return fig
+    return go.Figure(data=props['traces'], layout=layout)
 
 
 def plot_seasonality_plotly(m, name, uncertainty=True, figsize=(900, 300)):
@@ -827,8 +830,7 @@ def plot_seasonality_plotly(m, name, uncertainty=True, figsize=(900, 300)):
         xaxis=props['xaxis'],
         yaxis=props['yaxis']
     )
-    fig = go.Figure(data=props['traces'], layout=layout)
-    return fig
+    return go.Figure(data=props['traces'], layout=layout)
 
 
 def get_forecast_component_plotly_props(m, fcst, name, uncertainty=True, plot_cap=False):
@@ -849,7 +851,6 @@ def get_forecast_component_plotly_props(m, fcst, name, uncertainty=True, plot_ca
     A dictionary with Plotly traces, xaxis and yaxis
     """
     prediction_color = '#0072B2'
-    error_color = 'rgba(0, 114, 178, 0.2)'  # '#0072B2' with 0.2 opacity
     cap_color = 'black'
     zeroline_color = '#AAA'
     line_width = 2
@@ -860,7 +861,7 @@ def get_forecast_component_plotly_props(m, fcst, name, uncertainty=True, plot_ca
     text = None
     mode = 'lines'
     if name == 'holidays':
-        
+
         # Combine holidays into one hover text
         holidays = m.construct_holiday_dataframe(fcst['ds'])
         holiday_features, _, _ = m.make_holiday_features(fcst['ds'], holidays)
@@ -871,16 +872,19 @@ def get_forecast_component_plotly_props(m, fcst, name, uncertainty=True, plot_ca
             text[idxs.astype(bool) & (text != '')] += '<br>'  # Add newline if additional holiday
             text[idxs.astype(bool)] += holiday_feature
 
-    traces = []
-    traces.append(go.Scatter(
-        name=name,
-        x=fcst['ds'],
-        y=fcst[name],
-        mode=mode,
-        line=go.scatter.Line(color=prediction_color, width=line_width),
-        text=text,
-    ))
+    traces = [
+        go.Scatter(
+            name=name,
+            x=fcst['ds'],
+            y=fcst[name],
+            mode=mode,
+            line=go.scatter.Line(color=prediction_color, width=line_width),
+            text=text,
+        )
+    ]
+
     if uncertainty and m.uncertainty_samples and (fcst[name + '_upper'] != fcst[name + '_lower']).any():
+        error_color = 'rgba(0, 114, 178, 0.2)'  # '#0072B2' with 0.2 opacity
         if mode == 'markers':
             traces[0].update(
                 error_y=dict(
@@ -952,7 +956,6 @@ def get_seasonality_plotly_props(m, name, uncertainty=True):
     A dictionary with Plotly traces, xaxis and yaxis
     """
     prediction_color = '#0072B2'
-    error_color = 'rgba(0, 114, 178, 0.2)'  # '#0072B2' with 0.2 opacity
     line_width = 2
     zeroline_color = '#AAA'
 
@@ -970,15 +973,18 @@ def get_seasonality_plotly_props(m, name, uncertainty=True):
     df_y = seasonality_plot_df(m, days)
     seas = m.predict_seasonal_components(df_y)
 
-    traces = []
-    traces.append(go.Scatter(
-        name=name,
-        x=df_y['ds'],
-        y=seas[name],
-        mode='lines',
-        line=go.scatter.Line(color=prediction_color, width=line_width)
-    ))
+    traces = [
+        go.Scatter(
+            name=name,
+            x=df_y['ds'],
+            y=seas[name],
+            mode='lines',
+            line=go.scatter.Line(color=prediction_color, width=line_width),
+        )
+    ]
+
     if uncertainty and m.uncertainty_samples and (seas[name + '_upper'] != seas[name + '_lower']).any():
+        error_color = 'rgba(0, 114, 178, 0.2)'  # '#0072B2' with 0.2 opacity
         traces.append(go.Scatter(
             name=name + '_upper',
             x=df_y['ds'],

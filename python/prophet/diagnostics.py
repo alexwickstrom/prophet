@@ -39,12 +39,12 @@ def generate_cutoffs(df, horizon, initial, period):
     while result[-1] >= min(df['ds']) + initial:
         cutoff -= period
         # If data does not exist in data range (cutoff, cutoff + horizon]
-        if not (((df['ds'] > cutoff) & (df['ds'] <= cutoff + horizon)).any()):
-            # Next cutoff point is 'last date before cutoff in data - horizon'
-            if cutoff > df['ds'].min():
-                closest_date = df[df['ds'] <= cutoff].max()['ds']
-                cutoff = closest_date - horizon
-            # else no data left, leave cutoff as is, it will be dropped.
+        if (
+            not (((df['ds'] > cutoff) & (df['ds'] <= cutoff + horizon)).any())
+            and cutoff > df['ds'].min()
+        ):
+            closest_date = df[df['ds'] <= cutoff].max()['ds']
+            cutoff = closest_date - horizon
         result.append(cutoff)
     result = result[:-1]
     if len(result) == 0:
@@ -52,9 +52,10 @@ def generate_cutoffs(df, horizon, initial, period):
             'Less data than horizon after initial window. '
             'Make horizon or initial shorter.'
         )
-    logger.info('Making {} forecasts with cutoffs between {} and {}'.format(
-        len(result), result[-1], result[0]
-    ))
+    logger.info(
+        f'Making {len(result)} forecasts with cutoffs between {result[-1]} and {result[0]}'
+    )
+
     return list(reversed(result))
 
 
@@ -121,12 +122,12 @@ def cross_validation(model, horizon, period=None, initial=None, parallel=None, c
     predict_columns = ['ds', 'yhat']
     if model.uncertainty_samples:
         predict_columns.extend(['yhat_lower', 'yhat_upper'])
-        
+
     # Identify largest seasonality period
     period_max = 0.
     for s in model.seasonalities.values():
         period_max = max(period_max, s['period'])
-    seasonality_dt = pd.Timedelta(str(period_max) + ' days')    
+    seasonality_dt = pd.Timedelta(f'{str(period_max)} days')    
 
     if cutoffs is None:
         # Set period
@@ -149,19 +150,20 @@ def cross_validation(model, horizon, period=None, initial=None, parallel=None, c
         if max(cutoffs) > end_date_minus_horizon: 
             raise ValueError("Maximum cutoff value is greater than end date minus horizon, no value for cross-validation remaining")
         initial = cutoffs[0] - df['ds'].min()
-        
+
     # Check if the initial window 
     # (that is, the amount of time between the start of the history and the first cutoff)
     # is less than the maximum seasonality period
     if initial < seasonality_dt:
-            msg = 'Seasonality has period of {} days '.format(period_max)
-            msg += 'which is larger than initial window. '
-            msg += 'Consider increasing initial.'
-            logger.warning(msg)
+        msg = (
+            f'Seasonality has period of {period_max} days '
+            + 'which is larger than initial window. '
+        )
+
+        msg += 'Consider increasing initial.'
+        logger.warning(msg)
 
     if parallel:
-        valid = {"threads", "processes", "dask"}
-
         if parallel == "threads":
             pool = concurrent.futures.ThreadPoolExecutor()
         elif parallel == "processes":
@@ -178,8 +180,10 @@ def cross_validation(model, horizon, period=None, initial=None, parallel=None, c
         elif hasattr(parallel, "map"):
             pool = parallel
         else:
-            msg = ("'parallel' should be one of {} for an instance with a "
-                   "'map' method".format(', '.join(valid)))
+            valid = {"threads", "processes", "dask"}
+
+            msg = f"'parallel' should be one of {', '.join(valid)} for an instance with a 'map' method"
+
             raise ValueError(msg)
 
         iterables = ((df, model, cutoff, horizon, predict_columns)
@@ -194,9 +198,10 @@ def cross_validation(model, horizon, period=None, initial=None, parallel=None, c
 
     else:
         predicts = [
-            single_cutoff_forecast(df, model, cutoff, horizon, predict_columns) 
-            for cutoff in (tqdm(cutoffs) if not disable_tqdm else cutoffs)
+            single_cutoff_forecast(df, model, cutoff, horizon, predict_columns)
+            for cutoff in (cutoffs if disable_tqdm else tqdm(cutoffs))
         ]
+
 
     # Combine all predicted pd.DataFrame into one pd.DataFrame
     return pd.concat(predicts, axis=0).reset_index(drop=True)
@@ -367,9 +372,7 @@ def performance_metrics(df, metrics=None, rolling_window=0.1, monthly=False):
     if len(set(metrics)) != len(metrics):
         raise ValueError('Input metrics must be a list of unique values')
     if not set(metrics).issubset(set(valid_metrics)):
-        raise ValueError(
-            'Valid values for metrics are: {}'.format(valid_metrics)
-        )
+        raise ValueError(f'Valid values for metrics are: {valid_metrics}')
     df_m = df.copy()
     if monthly:
         df_m['horizon'] = df_m['ds'].dt.to_period('M').astype(int) - df_m['cutoff'].dt.to_period('M').astype(int)
@@ -386,9 +389,7 @@ def performance_metrics(df, metrics=None, rolling_window=0.1, monthly=False):
         w = max(w, 1)
         w = min(w, df_m.shape[0])
     # Compute all metrics
-    dfs = {}
-    for metric in metrics:
-        dfs[metric] = eval(metric)(df_m, w)
+    dfs = {metric: eval(metric)(df_m, w) for metric in metrics}
     res = dfs[metrics[0]]
     for i in range(1, len(metrics)):
         res_m = dfs[metrics[i]]

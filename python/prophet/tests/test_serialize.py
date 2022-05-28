@@ -144,10 +144,7 @@ class TestSerialize(TestCase):
             '0.7.1': (29.282810844704414, 'fb'),
         }
         for v, (pred_val, v_str) in old_versions.items():
-            fname = os.path.join(
-                os.path.dirname(__file__),
-                'serialized_model_v{}.json'.format(v)
-            )
+            fname = os.path.join(os.path.dirname(__file__), f'serialized_model_v{v}.json')
             with open(fname, 'r') as fin:
                 model_str = json.load(fin)
             # Check that deserializes

@@ -28,8 +28,7 @@ DATA = DATA_all.head(100)
 
 class CustomParallelBackend:
     def map(self, func, *iterables):
-        results = [func(*args) for args in zip(*iterables)]
-        return results
+        return [func(*args) for args in zip(*iterables)]
 
 
 class TestDiagnostics(TestCase):
@@ -107,7 +106,7 @@ class TestDiagnostics(TestCase):
                                  forecasts)
 
     def test_cross_validation_logistic_or_flat_growth(self):
-        params = (x for x in ['logistic', 'flat'])
+        params = iter(['logistic', 'flat'])
         for growth in params:
             with self.subTest(i=growth):
                 df = self.__df.copy()
